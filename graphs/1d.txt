@@ -1,0 +1,9 @@
+z = readmatrix("add.dat");
+
+for i = 1:length(z)
+    plot(z(i,:), 'LineWidth', 2)
+    grid on
+    axis([0 size(z,2) -1 1])                           
+    drawnow              
+    pause(0.1)               
+end
