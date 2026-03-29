@@ -6,7 +6,7 @@
 
 int main() {
   double ez[SIZE] = {0.}, hy[SIZE] = {0.}, ceze[SIZE], cezh[SIZE], imp0 = 377.0;
-  int qTime, maxTime = 450, mm;
+  int qTime, maxTime = 300, mm;
   int frame = 0;
 
   char filename[100] = "cond.dat";

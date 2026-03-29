@@ -5,7 +5,7 @@
 
 int main() {
   double ez[SIZE] = {0.}, hy[SIZE] = {0.}, imp0 = 377.0;
-  int qTime, maxTime = 450, mm;
+  int qTime, maxTime = 200, mm;
   int frame = 0;
 
   char filename[100] = "tfsb.dat";
