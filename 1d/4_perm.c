@@ -4,19 +4,12 @@
 #define SIZE 200
 
 int main() {
-  double ez[SIZE], hy[SIZE - 1], epsR[SIZE], imp0 = 377.0;
+  double ez[SIZE] = {0.}, hy[SIZE] = {0.}, epsR[SIZE], imp0 = 377.0;
   int qTime, maxTime = 450, mm;
-  char basename[80] = "sim", filename[100];
   int frame = 0;
-  FILE *snapshot;
 
-  /* initialize electric field */
-  for (mm = 0; mm < SIZE; mm++)
-    ez[mm] = 0.0;
-
-  /* initialize magnetic field */
-  for (mm = 0; mm < SIZE - 1; mm++)
-    hy[mm] = 0.0;
+  char filename[100] = "perm.dat";
+  FILE *snapshots;
 
   /* set relative permittivity */
   for (mm = 0; mm < SIZE; mm++)
@@ -25,7 +18,8 @@ int main() {
     else
       epsR[mm] = 9.0;
 
-  /* do time stepping */
+  snapshots = fopen(filename, "w");
+
   for (qTime = 0; qTime < maxTime; qTime++) {
 
     /* update magnetic field */
@@ -33,29 +27,27 @@ int main() {
       hy[mm] = hy[mm] + (ez[mm + 1] - ez[mm]) / imp0;
 
     /* correction for Hy adjacent to TFSF boundary */
-    hy[49] -= exp(-(qTime - 30.) * (qTime - 30.) / 100.) / imp0;
+    hy[49] -= exp(-(qTime - 30.0) * (qTime - 30.0) / 100.0) / imp0;
 
-    /* simple ABC for ez[0] and ez[SIZE - 1] */
+    /* simple ABC for ez[0] */
     ez[0] = ez[1];
-    ez[SIZE - 1] = ez[SIZE - 2];
 
     /* update electric field */
-    for (mm = 1; mm < SIZE - 1; mm++)
+    for (mm = 1; mm < SIZE; mm++)
       ez[mm] = ez[mm] + (hy[mm] - hy[mm - 1]) * imp0 / epsR[mm];
 
     /* correction for Ez adjacent to TFSF boundary */
-    ez[50] += exp(-(qTime + 0.5 - (-0.5) - 30.) * (qTime + 0.5 - (-0.5) - 30.) /
-                  100.);
+    ez[50] += exp(-(qTime + 0.5 - (-0.5) - 30.0) *
+                  (qTime + 0.5 - (-0.5) - 30.0) / 100.0);
 
-    /* write snapshot if time a multiple of 10 */
-    if (qTime % 10 == 0) {
-      sprintf(filename, "%s.%d", basename, frame++);
-      snapshot = fopen(filename, "w");
+    if (qTime % 2 == 0) {
       for (mm = 0; mm < SIZE; mm++)
-        fprintf(snapshot, "%g\n", ez[mm]);
-      fclose(snapshot);
+        fprintf(snapshots, "%g ", ez[mm]);
+      fprintf(snapshots, "\n");
     }
   }
+
+  fclose(snapshots);
 
   return 0;
 }

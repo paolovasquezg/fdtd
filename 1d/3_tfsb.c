@@ -4,17 +4,14 @@
 #define SIZE 200
 
 int main() {
-  double ez[SIZE], hy[SIZE];
-  double imp0 = 377.0;
+  double ez[SIZE] = {0.}, hy[SIZE] = {0.}, imp0 = 377.0;
   int qTime, maxTime = 450, mm;
-  char basename[80] = "sim", filename[100];
   int frame = 0;
-  FILE *snapshot;
 
-  for (mm = 0; mm < SIZE; mm++) {
-    ez[mm] = 0.0;
-    hy[mm] = 0.0;
-  }
+  char filename[100] = "tfsb.dat";
+  FILE *snapshots;
+
+  snapshots = fopen(filename, "w");
 
   for (qTime = 0; qTime < maxTime; qTime++) {
 
@@ -25,8 +22,6 @@ int main() {
 
     hy[49] -= exp(-(qTime - 30.0) * (qTime - 30.0) / 100.0) / imp0;
 
-    // Hy_inc (0,q) -> -1/no * e^-((q-0-30)^2 / 100)
-
     ez[0] = ez[1];
 
     for (mm = 1; mm < SIZE; mm++)
@@ -35,17 +30,14 @@ int main() {
     ez[50] += exp(-(qTime + 0.5 - (-0.5) - 30.0) *
                   (qTime + 0.5 - (-0.5) - 30.0) / 100.0);
 
-    //  Ez_inc (-1/2, q+1+/2) -> e^-((q+1/2-(-1/2) -30 ) ^ 2 /100 )
-
-    if (qTime % 10 == 0) {
-      sprintf(filename, "%s.%d", basename, frame++);
-      snapshot = fopen(filename, "w");
+    if (qTime % 2 == 0) {
       for (mm = 0; mm < SIZE; mm++)
-        fprintf(snapshot, "%g\n", ez[mm]);
-      fclose(snapshot);
+        fprintf(snapshots, "%g ", ez[mm]);
+      fprintf(snapshots, "\n");
     }
+  }
 
-  } /* end of time stepping */
+  fclose(snapshots);
 
   return 0;
 }
