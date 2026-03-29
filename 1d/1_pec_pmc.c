@@ -7,9 +7,9 @@
 
 int main() {
   double ez[SIZE] = {0.}, hy[SIZE] = {0.}, imp0 = 377.0;
-  int qTime, maxTime = 250, mm;
+  int qTime, maxTime = 1000, mm;
 
-  char filename[100] = "source.data";
+  char filename[100] = "source.dat";
   FILE *snapshot;
 
   snapshot = fopen(filename, "w");

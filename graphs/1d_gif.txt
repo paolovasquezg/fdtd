@@ -1,0 +1,29 @@
+z = readmatrix("source.dat");
+filename = 'animacion.gif';
+
+fig = figure('Position', [100 100 800 400], 'Color', 'white');
+
+for i = 1:size(z,1)
+    plot(z(i,:), 'LineWidth', 2)
+    grid on
+    axis([0 size(z,2) -1 1])
+    set(gca, 'Color', 'white', ...
+             'XColor', 'black', ...
+             'YColor', 'black', ...
+             'GridColor', 'black', ...
+             'GridAlpha', 0.3, ...
+             'Position', [0.08 0.1 0.88 0.85])
+    drawnow
+
+    frame = getframe(gcf);
+    img = frame2im(frame);
+    [imind, cm] = rgb2ind(img, 256);
+
+    if i == 1
+        imwrite(imind, cm, filename, 'gif', 'Loopcount', inf, 'DelayTime', 0.1);
+    else
+        imwrite(imind, cm, filename, 'gif', 'WriteMode', 'append', 'DelayTime', 0.1);
+    end
+end
+
+disp('Listo!')
