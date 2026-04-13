@@ -13,4 +13,4 @@ fdtd3d-tfsf: $(OBJ)
 	$(CC) $(CFLAGS) -c $<
 
 clean:
-	rm -f *.o fdtd3d-tfsf snap-x.* snap-y.*
+	rm -f *.o fdtd3d-tfsf sim-x.* sim-y.* sim-z.*
