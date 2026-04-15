@@ -2,6 +2,7 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from pathlib import Path
 
 PLANE_CONFIG = {("y", "z"): dict(normal="x", xlabel="y", ylabel="z"),
                 ("x", "z"): dict(normal="y", xlabel="x", ylabel="z"),
@@ -81,6 +82,13 @@ def animate(plane_key, tipo, basename):
 
     ani = animation.FuncAnimation(fig, update, frames=len(frames), interval=100, blit=False)
     plt.tight_layout()
+
+    # --- Guardar GIF ---
+    gif_path = Path(f"{basename}-{normal}_{xlabel}{ylabel}.gif")
+    print(f"Guardando GIF en '{gif_path}' ({len(frames)} frames)...")
+    ani.save(gif_path, writer="pillow", fps=10, dpi=100)
+    print(f"GIF guardado: {gif_path}")
+
     plt.show()
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ def log_scale(f, ref=0.3, decades=3):
         scaled = np.log10(np.abs(f) / ref)
     return np.clip(scaled, -decades, 0)
 
-def animate(tipo, basename):
+def animate(tipo, basename, save_gif=True, fps=10):
     frames = []
     i = 0
     while True:
@@ -49,11 +49,25 @@ def animate(tipo, basename):
         return [im, title]
 
     ani = animation.FuncAnimation(fig, update, frames=len(frames),
-                                  interval=100, blit=False)
-    plt.tight_layout()
-    plt.show()
+                                  interval=int(1000 / fps), blit=False)
+
+    if save_gif:
+        gif_path = f"{basename}.gif"
+        print(f"Saving GIF to '{gif_path}'...")
+        ani.save(gif_path, writer='pillow', fps=fps)
+        print(f"GIF saved: {gif_path}")
+    else:
+        plt.tight_layout()
+        plt.show()
 
 if __name__ == '__main__':
     tipo = sys.argv[1]
     basename = sys.argv[2]
-    animate(tipo, basename)
+
+    save_gif = '--show' not in sys.argv
+    fps = 10
+    for arg in sys.argv:
+        if arg.startswith('--fps='):
+            fps = int(arg.split('=')[1])
+
+    animate(tipo, basename, save_gif=save_gif, fps=fps)
