@@ -13,7 +13,7 @@ sinfo -O "partition"
 ```
 
 ---
-cl
+
 # 1. Entrar al Login Node
 
 ```bash
@@ -177,7 +177,19 @@ junest -f -- pacman -Syu julia
 junest -f -- bash -c "julia -e 'import Pkg; Pkg.add(\"CUDA\"); Pkg.add(\"BenchmarkTools\")'"
 ```
 
+## j. Instalar Nsight Systems dentro de JuNest
+
+```bash
+junest -f -- bash -c "pacman -Sy && pacman -S --noconfirm nsight-systems"
+```
+
+Verificar instalación:
+```bash
+junest -f -- bash -c "nsys --version"
+```
+
+> **Nota:** `nsys` debe instalarse dentro de junest para poder instrumentar julia. Al ejecutar el profiling, `nsys` corre desde el host con `LD_PRELOAD=""` y julia corre dentro de junest.
+
 ---
 
 > **Nota:** El mensaje `environment: line 1: /usr/bin/which: No such file or directory` es un warning normal de JuNest, no es un error.
-
