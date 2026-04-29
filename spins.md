@@ -19,8 +19,10 @@ Shape optimization for photonic devices using Maxwell FDTD simulations on the Kh
 ### 1. Clone the repository
 
 ```bash
-git clone --recurse-submodules <repo-url>
-cd photonic-devices
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install -r maxwell-b/requirements.txt
 ```
 
 ### 2. Install dependencies
