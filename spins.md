@@ -1,298 +1,424 @@
-# Photonic Device Optimization on Khipu
+# Guía local — SPINS-B + Maxwell-B + photonic-devices
 
-Shape optimization for photonic devices using Maxwell FDTD simulations on the Khipu HPC cluster.
+Setup probado en: **Windows + WSL2 (Ubuntu 22.04) + RTX 4080 + CUDA 12.5**.
 
-**Supported devices:** `bend` · `wdm` · `crossing` · `splitter`
-
----
-
-## Requirements
-
-- Python **3.10.2** (`/opt/ohpc/pub/libs/gnu12/python3/3.10.2/bin/python3`)
-- CUDA 11.4 (GPU jobs)
-- Modules: `gnu12/12.4.0`, `mpich/3.4.3-ofi`, `python3/3.10.2`
+Esta guía tiene dos partes:
+- **Parte 1 — Instalación** (haces una vez)
+- **Parte 2 — Cómo correr una simulación** (cada vez que quieras optimizar)
 
 ---
 
-## Setup
+## Parte 1 — Instalación (una sola vez)
 
-### 1. Clone the repository
+### 1.1 Sistema base
+
+WSL2 con Ubuntu, driver NVIDIA para WSL instalado en Windows, y CUDA Toolkit 12.5 montado en `/usr/local/cuda`.
+
+Verificar:
+```bash
+nvidia-smi      # debe mostrar la 4080
+nvcc --version  # debe mostrar release 12.5
+```
+
+### 1.2 Variables de entorno CUDA (en `~/.bashrc`)
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-pip install -r maxwell-b/requirements.txt
+# CUDA setup
+export CUDA_HOME=/usr/local/cuda
+export LD_LIBRARY_PATH=/usr/lib/wsl/lib:$LD_LIBRARY_PATH
 ```
 
-### 2. Install dependencies
+Verificar después de `source ~/.bashrc`:
+```bash
+echo $CUDA_HOME              # /usr/local/cuda
+ls $CUDA_HOME/include/cuda.h # archivo existe
+ls /usr/lib/wsl/lib/libcuda.so* # libcuda.so y symlinks
+```
+
+### 1.3 Paquetes de sistema (Ubuntu)
 
 ```bash
-pip install -r requirements.txt
-pip install -r maxwell-b/requirements.txt
+sudo apt update
+sudo apt install -y \
+  build-essential python3-dev pkg-config \
+  libopenmpi-dev openmpi-bin \
+  libgeos-dev libhdf5-dev \
+  git tmux
 ```
 
-**`requirements.txt`** (photonics):
-
-```
-appdirs==1.4.4
-attrs==21.2.0
-certifi==2021.5.30
-charset-normalizer==2.0.6
-cma==3.1.0
-contours==0.0.2
-cycler==0.10.0
-dill==0.3.4
-flatdict==4.0.1
-fonttools==4.27.1
-future==0.18.2
-gdspy==1.6.9
-h5py==3.6.0
-idna==3.2
-Jinja2==3.1.1
-jsonschema==4.0.0a6
-kiwisolver==1.3.2
-Mako==1.2.0
-MarkupSafe==2.1.1
-matplotlib==3.5.0b1
-mpi4py>=3.1.4
-mypy-extensions==0.4.3
-numpy==1.22.3
-packaging==21.0
-pandas==1.3.3
-Pillow==8.3.2
-platformdirs==2.5.1
-pyparsing==3.0.0rc1
-pyrsistent==0.18.0
-pyswarms==1.3.0
-python-dateutil==2.8.2
-pytools==2022.1.3
-pytz==2021.1
-PyYAML>=6.0
-requests==2.26.0
-schematics==2.1.1
-scipy==1.7.3
-seaborn==0.11.2
-setuptools-scm==6.3.2
-Shapely==1.8a3
-six==1.16.0
-tomli==1.2.1
-tqdm==4.62.3
-typing-extensions==4.2.0
-typing-inspect==0.7.1
-urllib3==1.26.7
-```
-
-**`maxwell-b/requirements.txt`** (Maxwell):
-
-```
-appdirs==1.4.4
-h5py==3.6.0
-Jinja2==3.1.1
-Mako==1.2.0
-MarkupSafe==2.1.1
-mpi4py>=3.1.4
-numpy==1.22.3
-platformdirs==2.5.1
-pytools==2022.1.3
-scipy==1.8.0
-typing-extensions==4.2.0
-```
-
-### 3. Install additional packages
+### 1.4 Conda env
 
 ```bash
-/opt/ohpc/pub/libs/gnu12/python3/3.10.2/bin/python3 -m pip install --user pycuda
-/opt/ohpc/pub/libs/gnu12/python3/3.10.2/bin/python3 -m pip install --user progressbar2
-/opt/ohpc/pub/libs/gnu12/python3/3.10.2/bin/python3 -m pip install --user nlopt
-/opt/ohpc/pub/libs/gnu12/python3/3.10.2/bin/python3 -m pip install --user "numpy<2"
+conda create -n photonics python=3.10 -y
+conda activate photonics
+pip install --upgrade pip wheel setuptools
 ```
 
-### 4. Fix port mismatch
-
-Edit `maxwell-b/launch_webserver_khipu.sh` — change the webserver port from `9041` to `6000`:
+### 1.5 Clonar el proyecto (con submodules)
 
 ```bash
-python maxwell-server/webserver.py 6000 &> webserver.log
+mkdir -p ~/photonics-project && cd ~/photonics-project
+
+# Para que git recuerde el token después de la primera vez
+git config --global credential.helper store
+
+# Clona con submodules (spins-b y maxwell-b vienen como submodules
+# del fork del grupo TISparta — NO los repos públicos de Stanford)
+git clone --recurse-submodules https://github.com/TISparta/photonic-devices.git
+
+# Si por alguna razón los submodules salen vacíos:
+# cd photonic-devices && git submodule update --init --recursive
 ```
+
+> **Auth**: usuario `FabricioChavez` + Personal Access Token (con scope `repo`).
+> Token en https://github.com/settings/tokens.
+> Para pegar token en el prompt de password: click derecho en la terminal WSL.
+
+### 1.6 Dependencias Python del proyecto
+
+Dentro del env `photonics`:
+
+```bash
+cat > /tmp/requirements-local.txt << 'EOF'
+appdirs
+attrs
+certifi
+charset-normalizer
+cma
+contours[shapely]
+cycler
+dill
+flatdict
+fonttools
+future
+gdspy
+h5py
+idna
+Jinja2
+jsonschema
+kiwisolver
+Mako
+MarkupSafe
+matplotlib
+mpi4py
+mypy-extensions
+numpy<2
+packaging
+pandas
+Pillow
+platformdirs
+pyparsing
+pyrsistent
+pyswarms
+python-dateutil
+pytools
+pytz
+PyYAML
+requests
+schematics
+scipy
+seaborn
+setuptools-scm
+Shapely
+six
+tomli
+tqdm
+typing-extensions
+typing-inspect
+urllib3
+nlopt
+progressbar2
+EOF
+
+pip install -r /tmp/requirements-local.txt
+```
+
+> `numpy<2` es **crítico** — el código usa APIs viejas que no existen en NumPy 2.x.
+
+### 1.7 pycuda
+
+```bash
+pip install pycuda
+```
+
+Esto compila desde fuente contra CUDA 12.5. Tarda 1-3 min.
+
+### 1.8 spins-b en modo editable
+
+```bash
+cd ~/photonics-project/photonic-devices/spins-b
+pip install -e .
+```
+
+### 1.9 Smoke test (verificación final)
+
+```bash
+cd ~/photonics-project/photonic-devices
+
+python -c "
+import sys, os
+sys.path.append(os.path.join(os.getcwd(), 'spins-b'))
+from spins import goos
+import pycuda.driver as drv
+from device.bend.Bend import Bend
+from algorithm.optimize import maximize_objective
+from util.transform import Projection, DensityFilter
+drv.init()
+print('GPUs:', drv.Device.count(), '-', drv.Device(0).name())
+print('Todo OK')
+"
+```
+
+Si imprime "Todo OK" + "GPUs: 1 - NVIDIA GeForce RTX 4080", la instalación está completa.
 
 ---
 
-## Configuration
+## Parte 2 — Cómo correr una simulación
 
-Open the optimize script for your device (e.g. `optimize-bend.py`) and set:
+Cada vez que quieras optimizar un dispositivo, sigues este flujo. Necesitas **3 terminales WSL** (o 3 paneles tmux).
+
+### 2.1 Configurar el script
+
+Edita `optimize-bend.py` (o el dispositivo que toque: `wdm`, `crossing`, `splitter`):
 
 ```python
-ALGORITHM = 'L-BFGS-B'   # L-BFGS-B | GA | PSO | CMA-ES | MMA
-STAGE     = 'cont'        # cont | disc | fab
-SIM_3D    = True
+ALGORITHM = 'L-BFGS-B'   # opciones: L-BFGS-B | GA | PSO | CMA-ES | MMA
+STAGE     = 'cont'       # empezar SIEMPRE por 'cont'
+SIM_3D    = True         # True para 3D (usa GPU/Maxwell), False para 2D (solo CPU)
 SEED      = 256
 ```
 
----
-
-## Running
-
-### Step 1 — Start Maxwell
-
-Submit both Maxwell jobs and confirm they are running before launching the optimizer.
-
-```bash
-sbatch maxwell-b/launch_simserver_khipu.sh
-sbatch maxwell-b/launch_webserver_khipu.sh
-
-# Wait until both show as RUNNING
-squeue -u $USER
-
-# Check for errors
-tail maxwell-b/simserver.log
-tail maxwell-b/webserver.log
+Las constantes están como índices en listas, así que en el archivo realmente se ven así:
+```python
+ALGORITHM = ALGORITHM_LIST[3]   # L-BFGS-B
+STAGE     = STAGE_LIST[0]        # cont
+SIM_3D    = True
+SEED      = int(SEED_LIST[1])    # 256
 ```
 
-> **Maxwell must stay running throughout all 3 stages.**
+### 2.2 Borrar carpeta vieja (si ya corriste antes)
 
-### Step 2 — Run the 3 stages in order
-
-Each stage must complete before starting the next. Edit `STAGE` in the optimize script between submissions.
+El script SE NIEGA a re-correr si la carpeta de output existe:
 
 ```bash
-# Stage 1 — continuous
-# optimize-bend.py: STAGE = 'cont'
-sbatch launch_bend_khipu.sh && squeue -u $USER
-
-# Stage 2 — discrete  (after Stage 1 finishes)
-# optimize-bend.py: STAGE = 'disc'
-sbatch launch_bend_khipu.sh && squeue -u $USER
-
-# Stage 3 — fabrication  (after Stage 2 finishes)
-# optimize-bend.py: STAGE = 'fab'
-sbatch launch_bend_khipu.sh && squeue -u $USER
+cd ~/photonics-project/photonic-devices
+rm -rfv output/bend/L-BFGS-B/cont/256/   # ajusta device/algoritmo/stage/seed
 ```
 
-### Step 3 — Post-process
+### 2.3 Levantar Maxwell-B (Terminales 1 y 2)
+
+> Solo necesario si `SIM_3D = True`. Si es 2D, salta a 2.4.
+
+#### Terminal 1 — simserver (GPU)
+
+```bash
+conda activate photonics
+cd ~/photonics-project/photonic-devices/maxwell-b
+
+export MAXWELL_SERVER_FILES=/tmp/maxwell-server-files
+mkdir -p $MAXWELL_SERVER_FILES
+export OMP_NUM_THREADS=2
+
+python maxwell-server/simserver.py 1
+```
+
+Esperar a que aparezca:
+```
+[INFO][simserver][main] Number of GPUs detected on system: 1
+[INFO][simserver][main] Ready to accept simulations.
+```
+
+**No cerrar esta terminal mientras corras simulaciones.**
+
+#### Terminal 2 — webserver
+
+```bash
+conda activate photonics
+cd ~/photonics-project/photonic-devices/maxwell-b
+
+export MAXWELL_SERVER_FILES=/tmp/maxwell-server-files
+
+python maxwell-server/webserver.py 9041
+```
+
+Esperar:
+```
+Serving at ('0.0.0.0', 9041)
+```
+
+> El puerto `9041` es el default que usa spins-b internamente. No hace falta cambiar nada en el cliente.
+
+### 2.4 Lanzar el optimizador (Terminal 3)
+
+```bash
+conda activate photonics
+cd ~/photonics-project/photonic-devices
+
+export OMP_NUM_THREADS=1
+python optimize-bend.py
+```
+
+Output esperado:
+```
+Initial:  [0.0457... 0.5861... ...]
+[INFO][optplan][run] Running action 0 (goos.action.optimizer.custom.0).
+[INFO][optimize][func] Function evaluated 1: -0.0005
+[INFO][optimize][grad] Gradient norm evaluated 1: 0.0053
+[INFO][optimize][func] Function evaluated 2: -0.0005
+...
+```
+
+Cada solve 3D tarda ~30-60s en una RTX 4080. Stage 'cont' completo: ~30 min - 2 h.
+
+### 2.5 Correr los 3 stages en orden
+
+Cuando 'cont' termine, edita `optimize-bend.py`:
+
+```python
+STAGE = STAGE_LIST[1]   # 'disc' (discretization)
+```
+
+Y vuelve a correr en T3:
+```bash
+python optimize-bend.py
+```
+
+Después:
+```python
+STAGE = STAGE_LIST[2]   # 'fab' (fabrication)
+```
+```bash
+python optimize-bend.py
+```
+
+> Maxwell-b sigue vivo en T1 y T2 todo este tiempo. No tocar.
+
+### 2.6 Postprocess
+
+Cuando los 3 stages terminen:
 
 ```bash
 python postprocess-bend.py
 ```
 
----
+Genera plots y GDS en `output/` y `plots/`.
 
-## Output
+### 2.7 Apagar Maxwell
 
-Results are saved to:
-
-```
-output/<device>/<ALGORITHM>/<STAGE>/<SEED>/
-```
-
-> If an output folder already exists the script will skip that stage. Delete the folder to rerun it.
+`Ctrl+C` en Terminal 1 y Terminal 2.
 
 ---
 
-## Other Devices
+## Otros dispositivos
 
-Replace `bend` with `wdm`, `crossing`, or `splitter` throughout:
+Mismo procedimiento, cambiando el nombre:
 
-| Device | Optimize script | Launch script | Post-process |
-|--------|----------------|---------------|-------------|
-| Bend | `optimize-bend.py` | `launch_bend_khipu.sh` | `postprocess-bend.py` |
-| WDM | `optimize-wdm.py` | `launch_wdm_khipu.sh` | `postprocess-wdm.py` |
-| Crossing | `optimize-crossing.py` | `launch_crossing_khipu.sh` | `postprocess-crossing.py` |
-| Splitter | `optimize-splitter.py` | `launch_splitter_khipu.sh` | `postprocess-splitter.py` |
+| Dispositivo | Optimize              | Postprocess              |
+|-------------|-----------------------|--------------------------|
+| bend        | `optimize-bend.py`    | `postprocess-bend.py`    |
+| wdm         | `optimize-wdm.py`     | `postprocess-wdm.py`     |
+| crossing    | `optimize-crossing.py`| `postprocess-crossing.py`|
+| splitter    | `optimize-splitter.py`| `postprocess-splitter.py`|
+
+Carpeta de output: `output/<device>/<ALGORITHM>/<STAGE>/<SEED>/`
 
 ---
 
-## SLURM Scripts Reference
-
-<details>
-<summary><strong>Simserver</strong> — GPU FDTD solver (1 GPU, 2 cores, 8 GB)</summary>
+## Comandos útiles durante la corrida
 
 ```bash
-#!/bin/sh
-#SBATCH -J maxwell-sim
-#SBATCH --partition=gpu
-#SBATCH --gpus=1
-#SBATCH --nodelist=g002
-#SBATCH -c 2
-#SBATCH --mem=8GB
+# Ver GPU trabajando (cualquier terminal aparte)
+watch -dc -n 2 nvidia-smi
 
-module purge > /dev/null 2>&1
-module load gnu12/12.4.0
-module load cuda/11.4
-module load mpich/3.4.3-ofi
-module load python3/3.10.2
+# Tail del log del optimizador
+tail -f ~/photonics-project/photonic-devices/output/bend/L-BFGS-B/cont/256/spins.log
 
-export PATH=/usr/local/cuda-11.4/targets/x86_64-linux/lib:$PATH
-export LD_LIBRARY_PATH=/usr/local/cuda-11.4/lib64:$LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=/opt/ohpc/pub/libs/gnu12/python3/3.10.2/lib:$LD_LIBRARY_PATH
-export OMP_NUM_THREADS=2
-export MAXWELL_SERVER_FILES=/tmp/maxwell-server-files
+# Verificar que el webserver responde
+curl http://localhost:9041/   # devuelve "N jobs pending (maxwell-server)"
 
-python3 maxwell-server/simserver.py 1 &> simserver.log
-
-module unload mpich/3.4.3-ofi
-module unload cuda/11.4
-module unload gnu12/12.4.0
+# Matar algo en el puerto 9041 si quedó colgado
+lsof -ti:9041 | xargs kill -9
 ```
 
-</details>
+---
 
-<details>
-<summary><strong>Webserver</strong> — HTTP relay on port 6000 (2 cores, 8 GB)</summary>
+## tmux (recomendado para no manejar 3 ventanas)
 
 ```bash
-#!/bin/sh
-#SBATCH -J maxwell-web
-#SBATCH --partition=gpu
-#SBATCH --nodelist=g002
-#SBATCH -c 2
-#SBATCH --mem=8GB
-
-module purge > /dev/null 2>&1
-module load gnu12/12.4.0
-module load cuda/11.4
-module load mpich/3.4.3-ofi
-module load python3/3.10.2
-
-export PATH=/usr/local/cuda-11.4/targets/x86_64-linux/lib:$PATH
-export LD_LIBRARY_PATH=/usr/local/cuda-11.4/lib64:$LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=/opt/ohpc/pub/libs/gnu12/python3/3.10.2/lib:$LD_LIBRARY_PATH
-export OMP_NUM_THREADS=2
-export MAXWELL_SERVER_FILES=/tmp/maxwell-server-files
-
-python3 maxwell-server/webserver.py 6000 &> webserver.log
-
-module unload mpich/3.4.3-ofi
-module unload cuda/11.4
-module unload gnu12/12.4.0
+tmux new -s photonics
 ```
 
-</details>
+Dentro de tmux:
+- `Ctrl+B` `"` → split horizontal
+- `Ctrl+B` `%` → split vertical
+- `Ctrl+B` `flechas` → moverte entre paneles
+- `Ctrl+B` `D` → detach (procesos siguen vivos)
+- `tmux attach -t photonics` → reconectar
 
-<details>
-<summary><strong>Photonic optimizer</strong> — CPU only (1 core, 16 GB) — example: bend</summary>
+Layout sugerido: split vertical (mitad izq / der), luego en mitad izq split horizontal → 3 paneles.
 
+---
+
+## Problemas comunes
+
+**`Optimization already made`**
+→ La carpeta `output/<device>/<algo>/<stage>/<seed>/` existe. Borrar con `rm -rf` y reintentar.
+
+**`ConnectionRefused` en localhost:9041**
+→ Maxwell-b no está corriendo. Verifica T1 y T2.
+
+**Token de GitHub no funciona al hacer git pull**
+→ Token expirado. Generar nuevo en https://github.com/settings/tokens, scope `repo`. Pegar con click derecho.
+
+**`numpy.dtype size changed`**
+→ Tienes numpy 2.x instalado. Forzar: `pip install "numpy<2" --force-reinstall`.
+
+**El simserver dice "GPUs detected: 0"**
+→ pycuda no ve la GPU desde dentro del env. Verifica con:
 ```bash
-#!/bin/sh
-#SBATCH -J bend-spins
-#SBATCH --partition=gpu
-#SBATCH --nodelist=g002
-#SBATCH -c 1
-#SBATCH --mem=16GB
+python -c "import pycuda.driver as drv; drv.init(); print(drv.Device.count())"
+```
+Si dice 0, revisa `LD_LIBRARY_PATH` y `CUDA_HOME` en el env donde lanzaste simserver.
 
-module purge > /dev/null 2>&1
-module load gnu12/12.4.0
-module load mpich/3.4.3-ofi
-module load python3/3.10.2
+**`Address already in use` en puerto 9041**
+→ Mata el proceso colgado: `lsof -ti:9041 | xargs kill -9`
 
-export LD_LIBRARY_PATH=/opt/ohpc/pub/libs/gnu12/python3/3.10.2/lib:$LD_LIBRARY_PATH
-export OMP_NUM_THREADS=1
-export MAXWELL_SERVER=localhost:6000
+**ComplexWarning en scipy**
+→ Inofensivo, ignorar.
 
-/opt/ohpc/pub/libs/gnu12/python3/3.10.2/bin/python3 optimize-bend.py
+**404 File not found en logs del webserver**
+→ Polling normal del cliente preguntando si su simulación terminó. No es error.
 
-module unload mpich/3.4.3-ofi
-module unload gnu12/12.4.0
+---
+
+## Estructura del proyecto
+
+```
+~/photonics-project/
+└── photonic-devices/             ← repo principal (privado, TISparta)
+    ├── .gitmodules
+    ├── spins-b/                  ← submodule (commit b271f94)
+    ├── maxwell-b/                ← submodule (commit bd9e8db)
+    ├── device/                   ← definición de cada dispositivo
+    │   ├── bend/
+    │   ├── crossing/
+    │   ├── splitter/
+    │   └── wdm/
+    ├── algorithm/                ← wrappers de algoritmos de optimización
+    ├── util/                     ← transformaciones (filtros, projection)
+    ├── optimize-{device}.py      ← scripts de optimización
+    ├── postprocess-{device}.py   ← scripts de post-procesamiento
+    ├── output/                   ← resultados (creado al correr)
+    └── plots/                    ← plots finales
 ```
 
-</details>
+---
+
+## Recordatorios rápidos
+
+1. Activar env SIEMPRE: `conda activate photonics`
+2. Las 3 terminales necesitan el env activado
+3. En Maxwell-b: `OMP_NUM_THREADS=2`. En el optimizador: `OMP_NUM_THREADS=1`
+4. Stage 'cont' debe terminar antes que 'disc'. 'disc' antes que 'fab'.
+5. Borrar carpeta de output antes de re-correr el mismo stage.
+6. Maxwell-b queda vivo durante los 3 stages — no lo cierres entre ellos.
